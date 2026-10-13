@@ -257,7 +257,7 @@ public static partial class Domains
 /// Owner's rule: a client domain is never registered unless the client paid for it and the payment is confirmed — the team is
 /// asked to register it only from here, after confirmation, and only when the order includes a paid domain.
 /// </summary>
-public class OrderPaidHandler(IAppDbContext db, TimeProvider clock, SitePublishing publishing, IEmailSender email, IRealtime realtime,
+public class OrderPaidHandler(IAppDbContext db, TimeProvider clock, SitePublishing publishing, IEmailSender email, IRealtime realtime, IOutboundWebhook webhook,
     IOptions<PricingOptions> prices, IOptions<SiteOptions> site, ILogger<OrderPaidHandler> log) : INotificationHandler<PaymentPaidEvent>
 {
     public async Task Handle(PaymentPaidEvent e, CancellationToken ct)
@@ -297,5 +297,6 @@ public class OrderPaidHandler(IAppDbContext db, TimeProvider clock, SitePublishi
         await realtime.ToOrderAsync(o.Id, "payment", payload);
         if (o.UserId is { } owner) await realtime.ToUserAsync(owner, "payment", payload);
         await realtime.ToStaffAsync("order", new { orderId = o.Id, status = "paid", total = o.Total, name = o.Name });
+        webhook.Enqueue("order_paid", new { orderId = o.Id, o.Kind, o.Name, o.Email, o.Phone, o.SiteName, o.Plan, o.Total, o.DomainName, o.DomainPaid, o.Url, invoice });
     }
 }

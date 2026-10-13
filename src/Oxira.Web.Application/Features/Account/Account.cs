@@ -48,7 +48,7 @@ public record RemoveMemberCommand(int Id) : ICommand<Done>;
 public record PartnerQuery : IQuery<PartnerResult>;
 
 /// <summary>Account extras: the bell, tax invoices, support tickets (with the Oxira team), team members and the partner dashboard.</summary>
-public class AccountHandlers(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IRealtime realtime, IEmailSender email,
+public class AccountHandlers(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IRealtime realtime, IEmailSender email, IOutboundWebhook webhook,
     IOptions<SiteOptions> site)
     : IRequestHandler<NotificationsQuery, NotificationsResult>, IRequestHandler<ReadNotificationsCommand, Done>, IRequestHandler<InvoicesQuery, InvoicesResult>,
       IRequestHandler<TicketsQuery, TicketsResult>, IRequestHandler<NewTicketCommand, SubmitResult>, IRequestHandler<ReplyTicketCommand, Done>,
@@ -129,6 +129,7 @@ public class AccountHandlers(IAppDbContext db, TimeProvider clock, Access access
         await notifier.NotifyStaffAsync(NotificationTypes.TicketAdmin, subject, t.Id, ct);
         await realtime.ToStaffAsync("ticket", new { id = t.Id, number = t.Number, subject, status = t.Status });
         email.Enqueue(Templates.TeamTicket(t, text, site.Value.TeamEmail));
+        webhook.Enqueue("ticket", new { t.Id, t.Number, t.Subject, t.Category, t.Email, text });
         return new SubmitResult(true, t.Id);
     }
 

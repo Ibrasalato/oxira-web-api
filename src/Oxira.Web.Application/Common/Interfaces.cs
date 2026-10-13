@@ -85,3 +85,9 @@ public interface IRealtime
     Task ToStaffAsync(string evt, object payload);
     Task ToOrderAsync(int orderId, string evt, object payload);
 }
+
+/// <summary>Optional copy of team events to an outside webhook (Site:NotifyWebhook, e.g. an n8n workflow). Fire-and-forget; the API never depends on it.</summary>
+public interface IOutboundWebhook
+{
+    void Enqueue(string evt, object data);
+}

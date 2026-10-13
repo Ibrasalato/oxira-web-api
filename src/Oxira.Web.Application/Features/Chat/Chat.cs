@@ -69,7 +69,7 @@ public static class ChatPrompts
 /// The oxira.sa assistant: Claude with one tool (save_lead). Memory is the last visible turns of the session.
 /// When it saves a lead the team is emailed by the server (not by the model), so the email is always complete.
 /// </summary>
-public class ChatHandlers(IAppDbContext db, TimeProvider clock, IAnthropic ai, IQuota quota, IEmailSender email, ICurrentUser current,
+public class ChatHandlers(IAppDbContext db, TimeProvider clock, IAnthropic ai, IQuota quota, IEmailSender email, ICurrentUser current, IOutboundWebhook webhook,
     IOptions<AiOptions> opt, IOptions<SiteOptions> site, ILogger<ChatHandlers> log)
     : IRequestHandler<SendChatCommand, ChatReply>, IRequestHandler<GetChatQuery, List<ChatTurnDto>>
 {
@@ -157,6 +157,7 @@ public class ChatHandlers(IAppDbContext db, TimeProvider clock, IAnthropic ai, I
         db.Leads.Add(lead);
         await db.SaveChangesAsync(ct);
         email.Enqueue(Templates.TeamLead(lead, site.Value.TeamEmail));
+        webhook.Enqueue("lead", new { lead.Id, lead.Kind, lead.Name, lead.Email, lead.Phone, lead.Service, lead.Details, lead.Lang });
         return lead.Id;
     }
 

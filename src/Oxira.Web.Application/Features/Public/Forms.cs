@@ -39,7 +39,7 @@ public interface ISiteCounter
 }
 
 /// <summary>Contact form, partner sign-up, client reviews and the proof strip.</summary>
-public class FormHandlers(IAppDbContext db, TimeProvider clock, ICurrentUser current, IEmailSender email, IOptions<SiteOptions> site, Access access, ISiteCounter sites)
+public class FormHandlers(IAppDbContext db, TimeProvider clock, ICurrentUser current, IEmailSender email, IOptions<SiteOptions> site, Access access, ISiteCounter sites, IOutboundWebhook webhook)
     : IRequestHandler<ContactCommand, SubmitResult>, IRequestHandler<PartnerSignupCommand, SubmitResult>, IRequestHandler<TestimonialCommand, SubmitResult>,
       IRequestHandler<ProofQuery, ProofDto>, IRequestHandler<ListLeadsQuery, List<LeadDto>>, IRequestHandler<ListTestimonialsQuery, List<TestimonialDto>>,
       IRequestHandler<ModerateTestimonialCommand, TestimonialDto>
@@ -62,6 +62,7 @@ public class FormHandlers(IAppDbContext db, TimeProvider clock, ICurrentUser cur
         await db.SaveChangesAsync(ct);
         email.Enqueue(Templates.TeamLead(lead, site.Value.TeamEmail));
         if (IsEmail(lead.Email)) email.Enqueue(Templates.LeadThanks(lead, site.Value.WhatsApp));
+        webhook.Enqueue("lead", new { lead.Id, lead.Kind, lead.Name, lead.Email, lead.Phone, lead.Service, lead.Details, lead.Lang });
         return new SubmitResult(true, lead.Id);
     }
 

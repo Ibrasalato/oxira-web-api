@@ -14,5 +14,9 @@ public static partial class DependencyInjection
         s.Configure<MetaOptions>(cfg.GetSection("Meta"));
         s.AddHttpClient<IMetaClient, MetaClient>(h => h.Timeout = TimeSpan.FromSeconds(60));
         s.AddHttpClient<IUptimeProbe, HttpUptimeProbe>(h => h.Timeout = TimeSpan.FromSeconds(15));
+        s.AddHttpClient("webhook", h => h.Timeout = TimeSpan.FromSeconds(10));
+        s.AddSingleton<WebhookQueue>();
+        s.AddSingleton<IOutboundWebhook>(sp => sp.GetRequiredService<WebhookQueue>());
+        s.AddHostedService<WebhookWorker>();
     }
 }

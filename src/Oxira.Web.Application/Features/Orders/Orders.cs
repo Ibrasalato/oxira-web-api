@@ -63,7 +63,7 @@ public partial class SitePublishing(IAppDbContext db, ISitePublisher kv, TimePro
         if (o.Slug == "") o.Slug = await UniqueSlugAsync(o, ct);
         var spec = SpecJson.Parse(o.SpecJson);
         spec["_order"] = o.Id;
-        var raw = spec.ToJsonString();
+        var raw = spec.ToJsonString(SpecJson.Relaxed);
         await kv.PutAsync($"slug:{o.Slug}", raw, ct);
         if (o.DomainName != "" && o.DomainOption is "new" or "own") await kv.PutAsync($"host:{o.DomainName}", raw, ct);
         await PushFeaturesAsync(o, ct);
@@ -87,7 +87,7 @@ public partial class SitePublishing(IAppDbContext db, ISitePublisher kv, TimePro
         JsonNode? settings;
         try { settings = JsonNode.Parse(o.SettingsJson); } catch (JsonException) { settings = new JsonObject(); }
         var feat = new JsonObject { ["suspended"] = suspended, ["features"] = new JsonArray(features.Select(f => (JsonNode?)JsonValue.Create(f)).ToArray()), ["settings"] = settings ?? new JsonObject() };
-        await kv.PutAsync($"feat:o{o.Id}", feat.ToJsonString(), ct);
+        await kv.PutAsync($"feat:o{o.Id}", feat.ToJsonString(SpecJson.Relaxed), ct);
     }
 
     private async Task<string> UniqueSlugAsync(Order o, CancellationToken ct)
@@ -135,7 +135,7 @@ public partial class OrderHandlers(IAppDbContext db, TimeProvider clock, Access 
             Kind = OrderKinds.Site, UserId = me?.Id, Email = mail != "" ? mail : me?.Email ?? "", Name = name, Phone = Line(i.Phone, 40), Notes = Clip(i.Notes, 2000),
             ClientType = Line(i.ClientType, 40), Template = Line(i.Template ?? SpecJson.Str(spec, "template"), 60), SiteName = Line(i.SiteName ?? SpecJson.Str(spec, "name"), 120),
             SiteLang = Langs.Of(i.SiteLang ?? SpecJson.Str(spec, "lang")), DomainOption = domainOption, DomainName = domain, Addons = Line(i.Addons, 200),
-            Plan = q.Plan, DomainPaid = q.DomainPaid, Subtotal = q.Subtotal, Vat = q.Vat, Total = q.Total, SpecJson = spec.ToJsonString(), Ref = refCode,
+            Plan = q.Plan, DomainPaid = q.DomainPaid, Subtotal = q.Subtotal, Vat = q.Vat, Total = q.Total, SpecJson = spec.ToJsonString(SpecJson.Relaxed), Ref = refCode,
             Lang = Langs.Of(i.Lang), Page = Line(i.Page, 300), Ip = current.Ip, CreatedAt = Now, UpdatedAt = Now,
         };
         db.Orders.Add(o);
@@ -160,7 +160,7 @@ public partial class OrderHandlers(IAppDbContext db, TimeProvider clock, Access 
         {
             Kind = OrderKinds.Bundle, UserId = me?.Id, Email = mail, Name = name, Phone = Line(i.Phone, 40), Notes = Clip(i.Notes, 1000), SiteName = business,
             Plan = "bundle", Subtotal = subtotal, Vat = vat, Total = subtotal + vat, Lang = Langs.Of(i.Lang), Ip = current.Ip, CreatedAt = Now, UpdatedAt = Now,
-            MetaJson = new JsonObject { ["business"] = business, ["activity"] = Line(i.Activity, 80), ["city"] = Line(i.City, 60), ["whatsapp"] = Line(i.Whatsapp, 40) }.ToJsonString(),
+            MetaJson = new JsonObject { ["business"] = business, ["activity"] = Line(i.Activity, 80), ["city"] = Line(i.City, 60), ["whatsapp"] = Line(i.Whatsapp, 40) }.ToJsonString(SpecJson.Relaxed),
         };
         db.Orders.Add(o);
         await db.SaveChangesAsync(ct);

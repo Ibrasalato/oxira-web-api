@@ -30,6 +30,8 @@ public record GetDraftQuery(string Id) : IQuery<DraftDto>;
 public static class SpecJson
 {
     public const int MaxBytes = 400_000;
+    /// <summary>stored and published as readable UTF-8 (Arabic not escaped); pages escape when they render</summary>
+    public static readonly JsonSerializerOptions Relaxed = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>the spec as the website sends it (JSON text) → a JSON object, or a bad_request error</summary>
     public static JsonObject Parse(string? raw)
@@ -101,7 +103,7 @@ public partial class StudioHandlers(IAppDbContext db, TimeProvider clock, IAnthr
         var action = i.Action == "create" ? "create" : "edit";
         var existing = spec.DeepClone().AsObject();
         foreach (var k in Locked) existing.Remove(k);
-        var user = $"Action: {action}\nThe owner says: {text}\n\nCurrent spec:\n{existing.ToJsonString()}";
+        var user = $"Action: {action}\nThe owner says: {text}\n\nCurrent spec:\n{existing.ToJsonString(SpecJson.Relaxed)}";
         try
         {
             var res = await ai.CreateMessageAsync(new AiRequest(BuilderPrompt.System, [new JsonObject { ["role"] = "user", ["content"] = user }], null, 4000, aiOpt.Value.Model), ct);
@@ -154,7 +156,7 @@ public partial class StudioHandlers(IAppDbContext db, TimeProvider clock, IAnthr
     {
         var spec = SpecJson.Parse(cmd.Input.Spec);
         spec.Remove("_order");
-        var raw = spec.ToJsonString();
+        var raw = spec.ToJsonString(SpecJson.Relaxed);
         var id = cmd.Input.DraftId is { } given && DraftRe().IsMatch(given) ? given : null;
         var draft = id == null ? null : await db.Drafts.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (draft == null)

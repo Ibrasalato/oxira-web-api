@@ -112,6 +112,8 @@
   - المفاتيح: `slug:` و`host:` و`draft:` و`img:` و`feat:o<id>` و`seo:o<id>` و`post:o<id>:<slug>` و`ticket:<code>`.
   - العدّاد `hits:o<id>:<yyyy-mm>` يكتبه الـ worker.
   - بدون إعدادات Cloudflare تُسجَّل المفاتيح في السجل فقط (`ISitePublisher`).
+- **الدومين الخاص بالعميل (own):** لا يُربط `host:<domain>` إلا بعد إثبات الملكية بسجل TXT (`verify_txt` في البوابة، ثم `POST /api/sites/external/{id}/check`). والدومين المستخدم لموقع مدفوع أو لموقع خارجي مؤكَّد لا يقبله حساب آخر (`409 domain`).
+- **التحقق من البريد:** إذا أُكّد البريد أول مرة برابط سحري، تُحذف أي كلمة مرور وُضعت قبل التأكيد وتنتهي كل الجلسات. وعناوين `Auth:AdminEmails` تصبح admin بعد التأكيد فقط.
 - **الأسرار المخزّنة:** كلمة مرور تطبيق WordPress ورموز Meta تُشفَّر بـ ASP.NET Data Protection، ومفاتيح التشفير محفوظة في قاعدة البيانات.
 - **المساحة المشتركة:** المشاهد (`viewer`) يقرأ فقط، وكل تعديل منه يرجع `403` مع `reason: viewer`. إزالة العضو تُنهي جلساته على ذلك الحساب فورًا.
 
@@ -136,7 +138,7 @@
 | `Meta__AppId` · `Meta__AppSecret` | تطبيق Meta. اضبط Redirect URI على `https://api.oxira.sa/api/social/meta/callback` |
 | `Site__ApiUrl` · `Site__SiteUrl` · `Site__TeamEmail` | العناوين العامة وبريد الفريق |
 | `Auth__AdminEmails__0` | بريد يصبح `admin` من أول تسجيل |
-| `Proxy__TrustCloudflare` | `true` خلف Cloudflare: عنوان الزائر من `CF-Connecting-IP` |
+| `Proxy__TrustCloudflare` | `true` خلف Cloudflare: عنوان الزائر من `CF-Connecting-IP`، ويُقبل فقط إذا جاء الاتصال من نطاقات Cloudflare (`Proxy__CloudflareRanges__0…`، والقائمة الرسمية افتراضيًا) |
 | `Status__Services__<key>` | روابط صفحة الحالة: `web` و`events` و`design` و`api` و`automation` |
 
 ## التشغيل محليًا

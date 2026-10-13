@@ -166,7 +166,7 @@ public class ClientSiteHandlers(IAppDbContext db, TimeProvider clock, IQuota quo
         var p = new Payment
         {
             Kind = PaymentKinds.Ticket, OrderId = o.Id, TicketId = ticket.Id, Email = mail, Subtotal = ticket.Amount, Vat = 0, Amount = ticket.Amount, CreatedAt = Now,
-            Description = $"{ticket.TypeName} × {qty} · {JsonText.Str(settings["eventName"]) is { Length: > 0 } ev ? ev : o.SiteName}",
+            Description = $"{ticket.TypeName} × {qty} · {(JsonText.Str(settings["eventName"]) is { Length: > 0 } ev ? ev : o.SiteName)}",
         };
         db.Payments.Add(p);
         await db.SaveChangesAsync(ct);

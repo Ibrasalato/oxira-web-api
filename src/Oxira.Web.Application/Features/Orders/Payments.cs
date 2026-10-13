@@ -82,9 +82,13 @@ public class PaymentService(IAppDbContext db, TimeProvider clock, IPaymentGatewa
                 Description = p.Description, Site = order == null ? "" : order.SiteName != "" ? order.SiteName : order.DomainName,
                 Subtotal = p.Subtotal, Vat = p.Vat, Total = p.Amount, PaidAt = p.PaidAt.Value,
             };
-            db.Invoices.Add(inv);
-            await db.SaveChangesAsync(ct);
-            inv.Number = $"OX-{Riyadh.Now(clock):yyyy}-{inv.Id:D6}";
+            // ticket sales are the site owner's sales, not Oxira's: no Oxira tax invoice
+            if (p.Kind != PaymentKinds.Ticket)
+            {
+                db.Invoices.Add(inv);
+                await db.SaveChangesAsync(ct);
+                inv.Number = $"OX-{Riyadh.Now(clock):yyyy}-{inv.Id:D6}";
+            }
             await db.SaveChangesAsync(ct);
             await uow.CommitAsync(ct);
             kind = p.Kind;

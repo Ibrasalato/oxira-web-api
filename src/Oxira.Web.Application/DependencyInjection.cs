@@ -18,6 +18,7 @@ public static class DependencyInjection
         s.Configure<PaymentOptions>(cfg.GetSection("Payments"));
         s.Configure<SitesOptions>(cfg.GetSection("Sites"));
         s.Configure<Features.External.ExternalOptions>(cfg.GetSection("External"));
+        s.Configure<StatusOptions>(cfg.GetSection("Status"));
         s.AddScoped<Access>();
         s.AddScoped<Sessions>();
         s.AddScoped<EmailCodes>();

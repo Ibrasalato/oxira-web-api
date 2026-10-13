@@ -48,7 +48,7 @@ public record RemoveMemberCommand(int Id) : ICommand<Done>;
 public record PartnerQuery : IQuery<PartnerResult>;
 
 /// <summary>Account extras: the bell, tax invoices, support tickets (with the Oxira team), team members and the partner dashboard.</summary>
-public class AccountHandlers(IAppDbContext db, TimeProvider clock, Access access, Sessions sessions, Notifier notifier, IRealtime realtime, IEmailSender email,
+public class AccountHandlers(IAppDbContext db, TimeProvider clock, Access access, Notifier notifier, IRealtime realtime, IEmailSender email,
     IOptions<SiteOptions> site)
     : IRequestHandler<NotificationsQuery, NotificationsResult>, IRequestHandler<ReadNotificationsCommand, Done>, IRequestHandler<InvoicesQuery, InvoicesResult>,
       IRequestHandler<TicketsQuery, TicketsResult>, IRequestHandler<NewTicketCommand, SubmitResult>, IRequestHandler<ReplyTicketCommand, Done>,

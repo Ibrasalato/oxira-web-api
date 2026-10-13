@@ -24,7 +24,11 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - run: dotnet restore Oxira.Web.slnx
+      - name: Restore
+        run: |
+          set -o pipefail
+          dotnet --info | head -20
+          dotnet restore Oxira.Web.slnx 2>&1 | tee restore.log || { grep -iE "error|warn" restore.log | head -15 | sed 's/^/::error::/'; exit 1; }
       - run: dotnet build Oxira.Web.slnx -c Release --no-restore
       - name: Test (real SQL Server)
         run: dotnet test Oxira.Web.slnx -c Release --no-build --logger "console;verbosity=normal" --logger GitHubActions

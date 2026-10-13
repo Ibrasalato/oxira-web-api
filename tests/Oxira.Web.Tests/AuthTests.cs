@@ -64,7 +64,7 @@ public class AuthTests(TestApp app) : IClassFixture<TestApp>
         Assert.False(unverified.GetProperty("success").GetBoolean());
         Assert.Equal("unverified", unverified.Str("reason"));
 
-        var (weak, wb) = await c.PostJson("/api/auth/signup", new { email = "x@example.com", name = "X", password = "short" });
+        var (weak, wb) = await c.PostJson("/api/auth/signup", new { email = "x@example.com", name = "Xavier", password = "short" });
         Assert.Equal(HttpStatusCode.BadRequest, weak);
         Assert.Equal("weak", wb.Str("reason"));
         await app.SignUpAsync("dup@example.com");

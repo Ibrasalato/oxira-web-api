@@ -65,7 +65,13 @@ public partial class SitePublishing(IAppDbContext db, ISitePublisher kv, TimePro
         spec["_order"] = o.Id;
         var raw = spec.ToJsonString(SpecJson.Relaxed);
         await kv.PutAsync($"slug:{o.Slug}", raw, ct);
-        if (o.DomainName != "" && o.DomainOption is "new" or "own") await kv.PutAsync($"host:{o.DomainName}", raw, ct);
+        // host:<domain> only for a domain Oxira registers for this paid order, or the client's own domain once DNS proves ownership,
+        // and never over a domain another site already holds
+        if (o.DomainName != "" && (o.DomainOption == "new" && o.DomainPaid || o.DomainOption == "own" && o.Verified))
+        {
+            if (await Domains.InUseAsync(db, o.DomainName, o.Id, o.UserId, ct)) log.LogWarning("Order {Order}: {Domain} belongs to another site, host mapping skipped", o.Id, o.DomainName);
+            else await kv.PutAsync($"host:{o.DomainName}", raw, ct);
+        }
         await PushFeaturesAsync(o, ct);
         o.Url = $"https://{o.Slug}.{sites.Value.SubdomainBase}/";
         if (kv.Enabled)
@@ -124,6 +130,7 @@ public partial class OrderHandlers(IAppDbContext db, TimeProvider clock, Access 
         var domainOption = i.DomainOption is "new" or "own" ? i.DomainOption : "none";
         var domain = domainOption == "none" ? "" : Domains.Normalize(i.DomainName);
         if (domainOption != "none" && domain == "" && !string.IsNullOrWhiteSpace(i.DomainName)) throw new DomainException("اسم الدومين غير صحيح", "domain");
+        if (domain != "" && await Domains.InUseAsync(db, domain, null, null, ct)) throw new DomainException("هذا الدومين مستخدم لموقع آخر", "domain", 409);
         var q = Pricing.ForSite(prices.Value, i.Addons, domainOption);
         if (decimal.TryParse(i.Total, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var shown) && shown != q.Subtotal)
             log.LogWarning("Order total from the page ({Shown}) differs from the price ({Price})", shown, q.Subtotal);
@@ -136,6 +143,7 @@ public partial class OrderHandlers(IAppDbContext db, TimeProvider clock, Access 
             ClientType = Line(i.ClientType, 40), Template = Line(i.Template ?? SpecJson.Str(spec, "template"), 60), SiteName = Line(i.SiteName ?? SpecJson.Str(spec, "name"), 120),
             SiteLang = Langs.Of(i.SiteLang ?? SpecJson.Str(spec, "lang")), DomainOption = domainOption, DomainName = domain, Addons = Line(i.Addons, 200),
             Plan = q.Plan, DomainPaid = q.DomainPaid, Subtotal = q.Subtotal, Vat = q.Vat, Total = q.Total, SpecJson = spec.ToJsonString(SpecJson.Relaxed), Ref = refCode,
+            VerifyToken = domainOption == "own" && domain != "" ? $"oxira-verify={Hex(12)}" : "",
             Lang = Langs.Of(i.Lang), Page = Line(i.Page, 300), Ip = current.Ip, CreatedAt = Now, UpdatedAt = Now,
         };
         db.Orders.Add(o);
@@ -239,6 +247,14 @@ public partial class OrderHandlers(IAppDbContext db, TimeProvider clock, Access 
 
 public static partial class Domains
 {
+    /// <summary>
+    /// The domain already belongs to another site: a paid order, or a verified external site (of another account when owner is given).
+    /// Unpaid orders and unverified external sites do not hold a domain, so nobody can squat one.
+    /// </summary>
+    public static Task<bool> InUseAsync(IAppDbContext db, string domain, int? exceptOrderId, Guid? owner, CancellationToken ct) =>
+        db.Orders.AnyAsync(o => o.DomainName == domain && o.Id != (exceptOrderId ?? 0) && o.Status != OrderStatuses.Cancelled &&
+            (o.Kind != OrderKinds.External && o.PaidAt != null || o.Kind == OrderKinds.External && o.Verified && (owner == null || o.UserId != owner)), ct);
+
     /// <summary>"https://www.Example.com/" → "example.com"; "" when it is not a domain name</summary>
     public static string Normalize(string? raw)
     {

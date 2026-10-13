@@ -81,17 +81,48 @@ public class HttpCurrentUser(IHttpContextAccessor http, IConfiguration cfg) : IC
     public Guid? ActingOwnerId => G(User?.FindFirstValue(OxiraClaims.Acting));
     public string? UserAgent => http.HttpContext?.Request.Headers.UserAgent.ToString();
 
-    /// <summary>behind Cloudflare the visitor's address is in CF-Connecting-IP (only trusted when Proxy:TrustCloudflare is on)</summary>
+    /// <summary>
+    /// Behind Cloudflare the visitor's address is in CF-Connecting-IP. It is trusted only when Proxy:TrustCloudflare is on AND the connection
+    /// itself comes from Cloudflare (Proxy:CloudflareRanges); anyone else could simply send the header.
+    /// </summary>
     public string Ip
     {
         get
         {
             var ctx = http.HttpContext;
             if (ctx == null) return "unknown";
-            if (cfg.GetValue("Proxy:TrustCloudflare", false) && ctx.Request.Headers.TryGetValue("CF-Connecting-IP", out var cf) && !string.IsNullOrWhiteSpace(cf))
-                return cf.ToString()[..Math.Min(cf.ToString().Length, 64)];
-            return ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var remote = ctx.Connection.RemoteIpAddress;
+            if (cfg.GetValue("Proxy:TrustCloudflare", false) && remote != null && CloudflareRanges.Contains(cfg, remote) &&
+                ctx.Request.Headers.TryGetValue("CF-Connecting-IP", out var cf) && System.Net.IPAddress.TryParse(cf.ToString().Trim(), out var visitor))
+                return visitor.ToString();
+            return remote?.ToString() ?? "unknown";
         }
+    }
+}
+
+/// <summary>Cloudflare's published edge ranges (https://www.cloudflare.com/ips/); Proxy:CloudflareRanges replaces the list.</summary>
+public static class CloudflareRanges
+{
+    public static readonly string[] Default =
+    [
+        "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+        "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+        "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+    ];
+
+    private static string[]? _source;
+    private static System.Net.IPNetwork[] _nets = [];
+
+    public static bool Contains(IConfiguration cfg, System.Net.IPAddress ip)
+    {
+        var list = cfg.GetSection("Proxy:CloudflareRanges").Get<string[]>() is { Length: > 0 } c ? c : Default;
+        if (!ReferenceEquals(list, _source) && (_source == null || !list.SequenceEqual(_source)))
+        {
+            _nets = list.Select(r => System.Net.IPNetwork.TryParse(r.Trim(), out var n) ? (System.Net.IPNetwork?)n : null).Where(n => n != null).Select(n => n!.Value).ToArray();
+            _source = list;
+        }
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        return _nets.Any(n => n.Contains(ip));
     }
 }
 

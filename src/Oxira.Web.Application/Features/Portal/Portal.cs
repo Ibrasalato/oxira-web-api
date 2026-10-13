@@ -16,7 +16,8 @@ namespace Oxira.Web.Application.Features.Portal;
 
 // ───── shapes the account page reads (snake_case where it does) ─────
 public record PortalSite([property: JsonPropertyName("order_id")] int OrderId, string Name, string Url, string Status, string Plan, string Domain,
-    JsonNode Spec, JsonNode Settings, bool External, bool Verified, string Kind);
+    JsonNode Spec, JsonNode Settings, bool External, bool Verified, string Kind,
+    [property: JsonPropertyName("domain_option")] string DomainOption, [property: JsonPropertyName("verify_txt")] string VerifyTxt);
 public record PortalSub(int Id, [property: JsonPropertyName("order_id")] int OrderId, string Product, decimal Price, string Period, string Status,
     [property: JsonPropertyName("next_due")] string NextDue, [property: JsonPropertyName("invoice_url")] string InvoiceUrl);
 public record PortalBooking(int Id, [property: JsonPropertyName("order_id")] int OrderId, string Name, string Phone, string Email, string Service, string Date, string Time, string Note, string Status);
@@ -78,7 +79,7 @@ public class PortalHandlers(IAppDbContext db, TimeProvider clock, Access access,
         var content = await db.ContentPacks.AsNoTracking().Where(c => ids.Contains(c.OrderId)).OrderByDescending(c => c.Month).Take(24).ToListAsync(ct);
         return new PortalView(true, a.Owner.Email, a.Role,
             orders.Select(o => new PortalSite(o.Id, o.SiteName, o.Url, o.Status, o.Plan, o.DomainName, ParseOr(o.SpecJson, () => new JsonObject()), ParseOr(o.SettingsJson, () => new JsonObject()),
-                o.Kind == OrderKinds.External, o.Verified, o.Kind)).ToList(),
+                o.Kind == OrderKinds.External, o.Verified, o.Kind, o.DomainOption, o.Verified ? "" : o.VerifyToken)).ToList(),
             subs.Select(s => new PortalSub(s.Id, s.OrderId, s.Product, s.Price, s.Period, s.Status, s.NextDue?.ToString("yyyy-MM-dd") ?? "", s.InvoiceUrl)).ToList(),
             bookings.Select(b => new PortalBooking(b.Id, b.OrderId, b.Name, b.Phone, b.Email, b.Service, b.Date, b.Time, b.Note, b.Status)).ToList(),
             tickets.Select(t => new PortalTicket(t.Id, t.OrderId, t.Code, t.Type, t.TypeName, t.Qty, t.Amount, t.Name, t.Phone, t.Email, t.Status, t.CheckedInAt?.UtcDateTime.ToString("O") ?? "")).ToList(),

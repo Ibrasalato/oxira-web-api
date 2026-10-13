@@ -27,7 +27,7 @@ public class ExternalOptions
 }
 
 /// <summary>Websites hosted elsewhere, added for the SEO and social add-ons. Ownership: a DNS TXT record oxira-verify=… on the domain.</summary>
-public class ExternalSiteHandlers(IAppDbContext db, TimeProvider clock, Access access, IDnsTxt dns, IOptions<ExternalOptions> opt, ILogger<ExternalSiteHandlers> log)
+public class ExternalSiteHandlers(IAppDbContext db, TimeProvider clock, Access access, IDnsTxt dns, SitePublishing publishing, IOptions<ExternalOptions> opt, ILogger<ExternalSiteHandlers> log)
     : IRequestHandler<AddExternalSiteCommand, AddExternalResult>, IRequestHandler<CheckExternalSiteCommand, CheckExternalResult>
 {
     public async Task<AddExternalResult> Handle(AddExternalSiteCommand cmd, CancellationToken ct)
@@ -37,6 +37,7 @@ public class ExternalSiteHandlers(IAppDbContext db, TimeProvider clock, Access a
         if (domain == "") throw new DomainException("اكتب اسم الدومين مثل example.com", "domain");
         var existing = await db.Orders.FirstOrDefaultAsync(o => o.UserId == a.Owner.Id && o.Kind == OrderKinds.External && o.DomainName == domain && o.Status != OrderStatuses.Cancelled, ct);
         if (existing != null) return new AddExternalResult(true, existing.Id, existing.VerifyToken);
+        if (await Domains.InUseAsync(db, domain, null, a.Owner.Id, ct)) throw new DomainException("هذا الدومين مستخدم لموقع آخر", "domain", 409);
         if (await db.Orders.CountAsync(o => o.UserId == a.Owner.Id && o.Kind == OrderKinds.External, ct) >= 30) throw DomainException.Limit("الحد الأقصى 30 موقعًا");
         var now = clock.GetUtcNow();
         var o = new Order
@@ -54,7 +55,8 @@ public class ExternalSiteHandlers(IAppDbContext db, TimeProvider clock, Access a
     {
         var a = await access.AccountAsync(ct);
         var o = await PortalHandlers.OrderOfAsync(db, a, cmd.OrderId, ct);
-        if (o.Kind != OrderKinds.External) throw DomainException.NotFound();
+        // external sites, and studio sites on the client's own domain (host mapping waits for this proof)
+        if (o.Kind != OrderKinds.External && !(o.DomainOption == "own" && o.VerifyToken != "")) throw DomainException.NotFound();
         if (!o.Verified)
         {
             IReadOnlyList<string> records = [];
@@ -62,9 +64,11 @@ public class ExternalSiteHandlers(IAppDbContext db, TimeProvider clock, Access a
             catch (Exception e) when (e is not OperationCanceledException) { log.LogWarning(e, "TXT lookup for {Domain} failed", o.DomainName); }
             if (records.Any(r => r.Trim().Trim('"') == o.VerifyToken))
             {
+                if (await Domains.InUseAsync(db, o.DomainName, o.Id, o.UserId, ct)) throw new DomainException("هذا الدومين مستخدم لموقع آخر", "domain", 409);
                 o.Verified = true;
                 o.UpdatedAt = clock.GetUtcNow();
                 await db.SaveChangesAsync(ct);
+                if (o.Kind != OrderKinds.External && o.PaidAt != null) await publishing.PublishAsync(o, ct);
             }
         }
         return new CheckExternalResult(true, o.Verified, o.VerifyToken, opt.Value.SearchConsoleEmail, o.DomainName);

@@ -148,9 +148,30 @@ public class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, I
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.MemberUserId, u.Id).SetProperty(t => t.JoinedAt, now), ct);
     }
 
+    /// <summary>
+    /// The email is now proven. If it was not before, a password (and two-step setting) chosen by whoever signed up unverified is dropped
+    /// and every session ends — unless this proof is the sign-up code itself (the same person who set the password).
+    /// Auth:AdminEmails become admins only here, once the address is proven.
+    /// </summary>
+    private async Task MarkVerifiedAsync(User u, bool keepPassword, CancellationToken ct)
+    {
+        if (!u.EmailVerified && !keepPassword)
+        {
+            u.PasswordHash = null;
+            u.TwoFactor = false;
+            await sessions.RevokeAllAsync(u, "verified-by-link", ct);
+        }
+        u.EmailVerified = true;
+        if (u.Role == Roles.Customer && IsAdminEmail(u.Email))
+        {
+            u.Role = Roles.Admin;
+            u.SecurityStamp = Guid.NewGuid().ToString("N");
+        }
+    }
+
     private User NewUser(string mail, string lang) => new()
     {
-        Email = mail, Lang = Langs.Of(lang), CreatedAt = Now, Role = IsAdminEmail(mail) ? Roles.Admin : Roles.Customer,
+        Email = mail, Lang = Langs.Of(lang), CreatedAt = Now, Role = Roles.Customer,
     };
 
     // ───── sign up and verify ─────
@@ -186,7 +207,7 @@ public class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, I
         var u = await ByEmailAsync(mail, ct);
         if (u == null || u.Suspended) throw new DomainException("انتهت صلاحية الرمز، اطلب رمزًا جديدًا", "expired");
         await codes.ConsumeAsync(mail, i.Code, purpose, ct);
-        u.EmailVerified = true;
+        await MarkVerifiedAsync(u, keepPassword: true, ct);
         u.FailedLogins = 0;
         u.LockedUntil = null;
         await db.SaveChangesAsync(ct);
@@ -276,8 +297,8 @@ public class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, I
         var u = await ByEmailAsync(mail, ct);
         if (u == null || u.Suspended) throw new DomainException("انتهت صلاحية الرمز، اطلب رمزًا جديدًا", "expired");
         await codes.ConsumeAsync(mail, i.Code, CodePurposes.Reset, ct);
+        await MarkVerifiedAsync(u, keepPassword: true, ct);
         u.PasswordHash = hasher.Hash(i.Password!);
-        u.EmailVerified = true;
         u.FailedLogins = 0;
         u.LockedUntil = null;
         await sessions.RevokeAllAsync(u, "password-reset", ct);
@@ -334,8 +355,7 @@ public class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, I
         var u = await ByEmailAsync(mail, ct);
         if (u == null)
         {
-            u = NewUser(mail, lang);
-            u.EmailVerified = true; // whoever opens the emailed link owns the address
+            u = NewUser(mail, lang); // verified only when the link is opened
             db.Users.Add(u);
         }
         if (u.Suspended) return new Done();
@@ -361,7 +381,7 @@ public class AuthHandlers(IAppDbContext db, TimeProvider clock, Access access, I
         var u = await db.Users.FirstOrDefaultAsync(x => x.Id == link.UserId, ct);
         if (u == null || u.Suspended) throw expired;
         link.UsedAt = Now;
-        u.EmailVerified = true;
+        await MarkVerifiedAsync(u, keepPassword: false, ct);
         await db.SaveChangesAsync(ct);
         await JoinInvitesAsync(u, ct);
         var result = await sessions.IssueAsync(u, ct: ct);

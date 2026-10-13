@@ -18,7 +18,7 @@ public static partial class DependencyInjection
         s.AddSingleton<ISafeFetcher, SafeFetcher>();
 
         s.AddScoped<IDbSeed, ExampleDemosSeed>();
-        s.AddScoped<Oxira.Web.Application.Features.Public.ISiteCounter, SiteCounter>();
+        s.AddScoped<Oxira.Web.Application.Features.Public.ISiteCounter, OrderSiteCounter>();
         AddCommerce(s, cfg);
     }
 

@@ -14,9 +14,14 @@ public static class DependencyInjection
         s.Configure<AiOptions>(cfg.GetSection("Ai"));
         s.Configure<AgentOptions>(cfg.GetSection("Agent"));
         s.Configure<AuditOptions>(cfg.GetSection("Audit"));
+        s.Configure<PricingOptions>(cfg.GetSection("Prices"));
+        s.Configure<PaymentOptions>(cfg.GetSection("Payments"));
+        s.Configure<SitesOptions>(cfg.GetSection("Sites"));
         s.AddScoped<Access>();
         s.AddScoped<Sessions>();
         s.AddScoped<EmailCodes>();
+        s.AddScoped<Features.Orders.PaymentService>();
+        s.AddScoped<Features.Orders.SitePublishing>();
         s.AddMediatR(c =>
         {
             c.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);

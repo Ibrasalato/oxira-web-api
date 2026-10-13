@@ -56,3 +56,56 @@ public class FakeFetcher : ISafeFetcher
         return Task.FromResult(Pages.TryGetValue(url.ToString(), out var r) ? r : new FetchResult(false, 404, url.ToString(), "text/html", "", 0, 50));
     }
 }
+
+public partial class TestApp
+{
+    public FakeGateway Gateway { get; } = new();
+    public FakePublisher Kv { get; } = new();
+
+    partial void MoreFakes(IServiceCollection s)
+    {
+        s.RemoveAll<IPaymentGateway>();
+        s.AddSingleton<IPaymentGateway>(Gateway);
+        s.RemoveAll<ISitePublisher>();
+        s.AddSingleton<ISitePublisher>(Kv);
+        IntegrationFakes(s);
+    }
+
+    partial void IntegrationFakes(IServiceCollection s);
+}
+
+/// <summary>Moyasar stand-in: invoices are created unpaid; Pay() marks one paid (optionally with another amount).</summary>
+public class FakeGateway : IPaymentGateway
+{
+    public string Name => "moyasar";
+    public bool Down { get; set; }
+    public ConcurrentDictionary<string, (InvoiceRequest Request, string Status, long Amount)> Invoices { get; } = new();
+
+    public Task<(string Id, string Url)> CreateInvoiceAsync(InvoiceRequest request, CancellationToken ct)
+    {
+        if (Down) throw new HttpRequestException("gateway down");
+        var id = "inv_" + Guid.NewGuid().ToString("N")[..10];
+        Invoices[id] = (request, "initiated", (long)Math.Round(request.Amount * 100));
+        Last = id;
+        return Task.FromResult((id, $"https://checkout.moyasar.test/invoices/{id}"));
+    }
+
+    public Task<GatewayInvoice?> GetInvoiceAsync(string id, CancellationToken ct) =>
+        Task.FromResult(Invoices.TryGetValue(id, out var i) ? new GatewayInvoice(id, i.Status, i.Amount, "SAR", i.Request.PaymentId.ToString()) : null);
+
+    public void Pay(string id, long? amount = null) { var i = Invoices[id]; Invoices[id] = (i.Request, "paid", amount ?? i.Amount); }
+    public string Last { get; private set; } = "";
+    public string For(Guid paymentId) => Invoices.Single(x => x.Value.Request.PaymentId == paymentId).Key;
+}
+
+/// <summary>Cloudflare KV stand-in (enabled, in memory).</summary>
+public class FakePublisher : ISitePublisher
+{
+    public bool Enabled => true;
+    public ConcurrentDictionary<string, string> Keys { get; } = new();
+    public ConcurrentDictionary<string, byte[]> Bytes { get; } = new();
+    public Task PutAsync(string key, string value, CancellationToken ct = default) { Keys[key] = value; return Task.CompletedTask; }
+    public Task PutBytesAsync(string key, byte[] value, string contentType, CancellationToken ct = default) { Bytes[key] = value; return Task.CompletedTask; }
+    public Task<string?> GetAsync(string key, CancellationToken ct = default) => Task.FromResult(Keys.GetValueOrDefault(key));
+    public Task DeleteAsync(string key, CancellationToken ct = default) { Keys.TryRemove(key, out _); Bytes.TryRemove(key, out _); return Task.CompletedTask; }
+}

@@ -11,6 +11,9 @@ public static class DependencyInjection
     {
         s.Configure<SiteOptions>(cfg.GetSection("Site"));
         s.Configure<AuthOptions>(cfg.GetSection("Auth"));
+        s.Configure<AiOptions>(cfg.GetSection("Ai"));
+        s.Configure<AgentOptions>(cfg.GetSection("Agent"));
+        s.Configure<AuditOptions>(cfg.GetSection("Audit"));
         s.AddScoped<Access>();
         s.AddScoped<Sessions>();
         s.AddScoped<EmailCodes>();

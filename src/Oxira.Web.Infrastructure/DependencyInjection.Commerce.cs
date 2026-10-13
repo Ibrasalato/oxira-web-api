@@ -18,6 +18,7 @@ public static partial class DependencyInjection
             s.AddSingleton<IPaymentSimulator>(sp => sp.GetRequiredService<SimulatedGateway>());
         }
         else s.AddHttpClient<IPaymentGateway, MoyasarGateway>(h => h.Timeout = TimeSpan.FromSeconds(30));
+        s.AddHttpClient<IDnsTxt, DohTxt>(h => h.Timeout = TimeSpan.FromSeconds(10));
         AddIntegrations(s, cfg);
     }
 

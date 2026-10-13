@@ -17,11 +17,13 @@ public static class DependencyInjection
         s.Configure<PricingOptions>(cfg.GetSection("Prices"));
         s.Configure<PaymentOptions>(cfg.GetSection("Payments"));
         s.Configure<SitesOptions>(cfg.GetSection("Sites"));
+        s.Configure<Features.External.ExternalOptions>(cfg.GetSection("External"));
         s.AddScoped<Access>();
         s.AddScoped<Sessions>();
         s.AddScoped<EmailCodes>();
         s.AddScoped<Features.Orders.PaymentService>();
         s.AddScoped<Features.Orders.SitePublishing>();
+        s.AddScoped<Notifier>();
         s.AddMediatR(c =>
         {
             c.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
